@@ -104,13 +104,20 @@ t1.js
 t1.py
 te.json
 
+# ==================== Documentation (not for repo) ====================
+DEPLOY.md
+GITHUB_UPLOAD.md
+PYTHONANYWHERE.md
+QUICKSTART.md
+TODO*.md
+api-design.md
+database-design.sql
+encryption-architecture.md
+project-structure.txt
+security-checklist.md
+push_to_github.bat
+push_to_github.sh
+
 # ==================== Exceptions ====================
-# Don't ignore these files
 !.gitignore
 !README.md
-!DEPLOY.md
-!PYTHONANYWHERE.md
-!TODO.md
-!TODO1.md
-!TODO2.md
-!TODO3.md
