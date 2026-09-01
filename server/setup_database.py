@@ -58,6 +58,8 @@ SQL_STATEMENTS = [
         file_size BIGINT NOT NULL COMMENT '原始文件大小（字节）',
         encrypted_data LONGBLOB NOT NULL COMMENT 'AES 加密后的图片数据',
         iv VARCHAR(64) NOT NULL COMMENT 'AES 初始化向量（十六进制）',
+        encrypted_thumbnail MEDIUMBLOB COMMENT '加密缩略图',
+        thumbnail_iv VARCHAR(64) COMMENT '缩略图 IV',
         description TEXT COMMENT '图片描述',
         tags VARCHAR(512) COMMENT '标签（逗号分隔）',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
