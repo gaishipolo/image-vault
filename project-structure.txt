@@ -1,0 +1,60 @@
+# 高私密性图片管理系统 - 项目结构
+
+## 后端 (Flask)
+backend/
+├── app/
+│   ├── __init__.py          # Flask 应用工厂
+│   ├── config.py            # 配置文件
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── admin.py         # 管理员模型
+│   │   └── image.py         # 图片模型
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── auth.py          # 认证 API
+│   │   ├── images.py        # 图片 API
+│   │   └── admin.py         # 管理员 API
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── auth_service.py  # 认证服务
+│   │   └── image_service.py # 图片服务
+│   └── utils/
+│       ├── __init__.py
+│       └── security.py      # 安全工具
+├── migrations/              # 数据库迁移
+├── requirements.txt         # Python 依赖
+├── .env                     # 环境变量
+└── run.py                   # 启动入口
+
+## 前端 (React)
+frontend/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── Auth/
+│   │   │   ├── LoginForm.jsx
+│   │   │   └── ProtectedRoute.jsx
+│   │   ├── Gallery/
+│   │   │   ├── ImageGallery.jsx
+│   │   │   └── ImageCard.jsx
+│   │   ├── Viewer/
+│   │   │   └── ImageViewer.jsx
+│   │   ├── Upload/
+│   │   │   └── ImageUpload.jsx
+│   │   └── Layout/
+│   │       ├── Header.jsx
+│   │       └── Sidebar.jsx
+│   ├── services/
+│   │   ├── api.js           # API 客户端
+│   │   ├── auth.js          # 认证服务
+│   │   └── crypto.js        # 加密服务
+│   ├── hooks/
+│   │   └── useAuth.js
+│   ├── context/
+│   │   └── AuthContext.jsx
+│   ├── utils/
+│   │   └── helpers.js
+│   ├── App.jsx
+│   └── main.jsx
+├── package.json
+└── vite.config.js
