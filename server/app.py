@@ -9,6 +9,9 @@ from flask_jwt_extended import JWTManager
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+# 确保工作目录是 server/ 目录（解决 PythonAnywhere WSGI 问题）
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 from config import config_by_name
 from models import db
 
