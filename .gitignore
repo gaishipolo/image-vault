@@ -30,8 +30,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build output
-client/dist/
+# Build output (保留 dist 用于部署)
+# client/dist/
 client/build/
 
 # ==================== IDE ====================
