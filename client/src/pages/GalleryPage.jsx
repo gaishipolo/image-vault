@@ -16,6 +16,8 @@ export default function GalleryPage() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [jumpToPage, setJumpToPage] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [viewerImage, setViewerImage] = useState(null);
@@ -26,7 +28,7 @@ export default function GalleryPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await getImages({ page, limit: 20, search: searchTerm || undefined });
+      const response = await getImages({ page, limit: pageSize, search: searchTerm || undefined });
       const items = response.data?.items || response.items || [];
       setImages(items);
       setTotalPages(response.data?.pagination?.pages || response.pagination?.pages || 1);
@@ -36,7 +38,7 @@ export default function GalleryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, pageSize]);
 
   useEffect(() => {
     if (isAuthenticated && keyReady) {
@@ -148,6 +150,20 @@ export default function GalleryPage() {
     fetchImages(search);
   };
 
+  const handleJumpToPage = (e) => {
+    e.preventDefault();
+    const num = parseInt(jumpToPage, 10);
+    if (num >= 1 && num <= totalPages) {
+      setPage(num);
+      setJumpToPage('');
+    }
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
   return (
     <Layout>
       <div className="gallery">
@@ -216,27 +232,60 @@ export default function GalleryPage() {
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="pagination">
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
+        <div className="pagination-bar">
+          <div className="page-size-selector">
+            <span className="page-label">每页</span>
+            <select
+              className="page-select"
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
             >
-              上一页
-            </button>
-            <span className="page-info">
-              {page} / {totalPages}
-            </span>
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              下一页
-            </button>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="page-label">条</span>
           </div>
-        )}
+
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                上一页
+              </button>
+              <span className="page-info">
+                {page} / {totalPages}
+              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                下一页
+              </button>
+            </div>
+          )}
+
+          <form className="jump-form" onSubmit={handleJumpToPage}>
+            <span className="page-label">跳转</span>
+            <input
+              className="input jump-input"
+              type="number"
+              min="1"
+              max={totalPages}
+              value={jumpToPage}
+              onChange={(e) => setJumpToPage(e.target.value)}
+              placeholder="页码"
+            />
+            <button className="btn btn-ghost btn-sm" type="submit">
+              GO
+            </button>
+          </form>
+        </div>
 
         {/* Simple viewer overlay */}
         {viewerImage && (
@@ -318,14 +367,48 @@ export default function GalleryPage() {
         }
         .gallery-error { color: var(--color-danger); }
         .empty-icon { font-size: 4rem; opacity: 0.3; }
+        .pagination-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
+          padding: 16px 0;
+        }
         .pagination {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 16px;
-          padding: 16px 0;
+          gap: 12px;
         }
         .page-info { font-size: 0.9rem; color: var(--color-text-secondary); }
+        .page-size-selector {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .page-label {
+          font-size: 0.85rem;
+          color: var(--color-text-secondary);
+        }
+        .page-select {
+          padding: 4px 8px;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          background: var(--color-surface);
+          color: var(--color-text);
+          font-size: 0.85rem;
+          cursor: pointer;
+        }
+        .jump-form {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .jump-input {
+          width: 60px;
+          padding: 4px 8px;
+          text-align: center;
+        }
         /* Viewer overlay */
         .viewer-overlay {
           position: fixed;
