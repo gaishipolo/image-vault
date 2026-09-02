@@ -27,7 +27,7 @@ if IS_PYTHONANYWHERE:
     FRONTEND_DIST = None
 else:
     # 本地环境，Flask 服务静态文件
-    FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'client', 'dist')
+    FRONTEND_DIST = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'client', 'dist'))
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -42,7 +42,7 @@ def create_app(config_name: str | None = None) -> Flask:
     config_name = config_name or os.getenv("FLASK_ENV", "development")
 
     if FRONTEND_DIST:
-        app = Flask(__name__, static_folder=FRONTEND_DIST, static_url_path='')
+        app = Flask(__name__, static_folder=None)
     else:
         app = Flask(__name__)
     app.config.from_object(config_by_name[config_name])
@@ -81,12 +81,23 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # --- 前端静态文件服务 ---------------------------------------------------
     if FRONTEND_DIST:
+        print(f"[DEBUG] FRONTEND_DIST: {FRONTEND_DIST}")
+        print(f"[DEBUG] Exists: {os.path.exists(FRONTEND_DIST)}")
+        if os.path.exists(FRONTEND_DIST):
+            print(f"[DEBUG] Contents: {os.listdir(FRONTEND_DIST)}")
+
         @app.route('/', defaults={'path': ''})
         @app.route('/<path:path>')
         def serve_frontend(path):
             """服务前端静态文件，非 API 路由都返回 index.html"""
-            if path and os.path.exists(os.path.join(FRONTEND_DIST, path)):
+            # API 路由不处理
+            if path.startswith('api/'):
+                return {"error": "Not found"}, 404
+            # 如果是真实文件，返回文件
+            file_path = os.path.join(FRONTEND_DIST, path)
+            if path and os.path.exists(file_path):
                 return send_from_directory(FRONTEND_DIST, path)
+            # 否则返回 index.html（SPA 路由）
             return send_from_directory(FRONTEND_DIST, 'index.html')
 
     return app

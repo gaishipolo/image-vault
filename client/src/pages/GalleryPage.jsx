@@ -3,7 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { useCrypto } from '../context/CryptoContext';
 import { getImages, deleteImage, getImage } from '../api/images';
 import { decryptImage } from '../utils/crypto';
+import { getCachedImage, setCachedImage } from '../utils/imageCache';
 import { toast } from '../components/Toast';
+import client from '../api/client';
 import Layout from '../components/Layout';
 import ImageCard from '../components/ImageCard';
 
@@ -22,6 +24,8 @@ export default function GalleryPage() {
   const [selected, setSelected] = useState(new Set());
   const [viewerImage, setViewerImage] = useState(null);
   const [viewerLoading, setViewerLoading] = useState(false);
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [batchTag, setBatchTag] = useState('');
   const viewerClosedRef = useRef(false);
 
   const fetchImages = useCallback(async (searchTerm) => {
@@ -109,8 +113,16 @@ export default function GalleryPage() {
 
   const handleViewImage = async (image) => {
     viewerClosedRef.current = false;
-    setViewerLoading(true);
     setViewerImage({ ...image, decryptedSrc: null });
+
+    // 检查缓存
+    const cached = getCachedImage(image.id);
+    if (cached) {
+      setViewerImage((prev) => ({ ...prev, decryptedSrc: cached }));
+      return;
+    }
+
+    setViewerLoading(true);
 
     try {
       const detail = await getImage(image.id);
@@ -120,6 +132,9 @@ export default function GalleryPage() {
       if (!decrypted || decrypted.length === 0) {
         throw new Error('解密结果为空');
       }
+
+      // 存入缓存
+      setCachedImage(image.id, decrypted);
 
       if (!viewerClosedRef.current) {
         setViewerImage((prev) => ({ ...prev, decryptedSrc: decrypted }));
@@ -164,6 +179,22 @@ export default function GalleryPage() {
     setPage(1);
   };
 
+  const handleBatchTag = async () => {
+    if (!batchTag.trim()) return;
+    const ids = Array.from(selected);
+
+    try {
+      const res = await client.put('/api/images/batch', { ids, tags: batchTag.trim() });
+      toast(`${res.data.data.updated} 个图片标签已更新`, 'success');
+    } catch (err) {
+      toast('批量打标签失败: ' + (err.response?.data?.error?.message || err.message), 'error');
+    }
+
+    setShowTagDialog(false);
+    setBatchTag('');
+    fetchImages(search);
+  };
+
   return (
     <Layout>
       <div className="gallery">
@@ -188,6 +219,9 @@ export default function GalleryPage() {
                 <span className="batch-count">已选 {selected.size} 项</span>
                 <button className="btn btn-ghost btn-sm" onClick={handleSelectAll}>
                   {selected.size === images.length ? '取消全选' : '全选'}
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowTagDialog(true)}>
+                  批量打标签
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={handleBatchDelete}>
                   批量删除
@@ -326,6 +360,44 @@ export default function GalleryPage() {
             </div>
           </div>
         )}
+
+        {/* Batch Tag Dialog */}
+        {showTagDialog && (
+          <div className="viewer-overlay" onClick={() => setShowTagDialog(false)}>
+            <div className="tag-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="tag-dialog-header">
+                <h3>批量打标签</h3>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowTagDialog(false)}>
+                  &#10005;
+                </button>
+              </div>
+              <div className="tag-dialog-body">
+                <p className="tag-dialog-info">
+                  为选中的 <strong>{selected.size}</strong> 张图片添加标签
+                </p>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="输入标签，多个标签用逗号分隔"
+                  value={batchTag}
+                  onChange={(e) => setBatchTag(e.target.value)}
+                  autoFocus
+                />
+                <p className="tag-dialog-hint">
+                  例如：风景,旅行,2024
+                </p>
+              </div>
+              <div className="tag-dialog-footer">
+                <button className="btn btn-ghost" onClick={() => setShowTagDialog(false)}>
+                  取消
+                </button>
+                <button className="btn btn-primary" onClick={handleBatchTag}>
+                  确认
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -461,6 +533,47 @@ export default function GalleryPage() {
           padding: 0 20px 16px;
           font-size: 0.85rem;
           color: var(--color-text-secondary);
+        }
+        /* Tag Dialog */
+        .tag-dialog {
+          background: var(--color-surface);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-lg);
+          width: 400px;
+          max-width: 90vw;
+          animation: fadeIn 0.2s ease;
+        }
+        .tag-dialog-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--color-border);
+        }
+        .tag-dialog-header h3 {
+          font-size: 1rem;
+          font-weight: 600;
+          margin: 0;
+        }
+        .tag-dialog-body {
+          padding: 20px;
+        }
+        .tag-dialog-info {
+          font-size: 0.9rem;
+          color: var(--color-text-secondary);
+          margin-bottom: 12px;
+        }
+        .tag-dialog-hint {
+          font-size: 0.8rem;
+          color: var(--color-text-muted);
+          margin-top: 8px;
+        }
+        .tag-dialog-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          padding: 16px 20px;
+          border-top: 1px solid var(--color-border);
         }
         @media (max-width: 640px) {
           .image-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }

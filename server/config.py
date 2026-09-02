@@ -2,10 +2,13 @@
 
 import os
 from datetime import timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# 确保从 config.py 所在目录加载 .env
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
 class Config:

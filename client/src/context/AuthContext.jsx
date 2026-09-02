@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
+import { clearImageCache } from '../utils/imageCache';
 
 const AuthContext = createContext(null);
 
@@ -13,6 +14,8 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('jwt_token');
+    sessionStorage.removeItem('aes_key');
+    clearImageCache();
     setToken(null);
     setIsAuthenticated(false);
     setUser(null);

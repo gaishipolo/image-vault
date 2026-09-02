@@ -303,6 +303,40 @@ def update_image(image_id: int):
 
 
 # ---------------------------------------------------------------------------
+# PUT /api/images/batch -- 批量更新图片标签
+# ---------------------------------------------------------------------------
+
+@images_bp.route("/batch", methods=["PUT"])
+@jwt_required()
+def batch_update_tags():
+    """批量更新图片标签。
+
+    请求体 (JSON):
+        ids:  list[int] -- 图片 ID 列表
+        tags: str       -- 新标签
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return _error("INVALID_REQUEST", "请求体必须为 JSON 格式", 400)
+
+    ids = data.get("ids", [])
+    tags = data.get("tags", "")
+
+    if not ids:
+        return _error("MISSING_FIELDS", "缺少 ids 参数")
+    if not tags:
+        return _error("MISSING_FIELDS", "缺少 tags 参数")
+
+    # 批量更新
+    updated = Image.query.filter(Image.id.in_(ids)).update(
+        {"tags": tags}, synchronize_session=False
+    )
+    db.session.commit()
+
+    return _success({"updated": updated})
+
+
+# ---------------------------------------------------------------------------
 # DELETE /api/images/<id> -- 删除图片
 # ---------------------------------------------------------------------------
 

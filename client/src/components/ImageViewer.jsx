@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCrypto } from '../context/CryptoContext';
 import { getImage } from '../api/images';
 import { decryptImage } from '../utils/crypto';
+import { getCachedImage, setCachedImage } from '../utils/imageCache';
 import './ImageViewer.css';
 
 /**
@@ -70,6 +71,16 @@ export default function ImageViewer({ images, currentIndex, onClose }) {
     let cancelled = false;
 
     const loadAndDecrypt = async () => {
+      // 检查缓存
+      const cached = getCachedImage(currentImage.id);
+      if (cached) {
+        if (!cancelled) {
+          setDecryptedSrc(cached);
+          setLoading(false);
+        }
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -79,9 +90,13 @@ export default function ImageViewer({ images, currentIndex, onClose }) {
         const { encrypted_data, iv, mime_type } = imageData;
 
         const base64Data = decryptImage(encrypted_data, iv, aesKey);
+        const dataUrl = `data:${mime_type};base64,${base64Data}`;
+
+        // 存入缓存
+        setCachedImage(currentImage.id, dataUrl);
 
         if (!cancelled) {
-          setDecryptedSrc(`data:${mime_type};base64,${base64Data}`);
+          setDecryptedSrc(dataUrl);
         }
       } catch (err) {
         if (!cancelled) {
