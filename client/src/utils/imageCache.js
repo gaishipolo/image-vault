@@ -3,7 +3,7 @@
  * 使用 LRU 策略缓存已解密的图片 data URL
  */
 
-const MAX_CACHE_SIZE = 50;
+const MAX_CACHE_SIZE = 20;
 const cache = new Map(); // imageId -> { dataUrl, timestamp }
 
 /**

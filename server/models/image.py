@@ -16,6 +16,7 @@ class Image(db.Model):
     file_size = db.Column(db.BigInteger, nullable=False)
     encrypted_data = db.Column(db.LargeBinary(length=(1 << 32) - 1), nullable=False)  # LONGBLOB
     iv = db.Column(db.String(64), nullable=False)
+    key_hash = db.Column(db.String(64), nullable=True, index=True)  # 密钥哈希，用于后端过滤
     encrypted_thumbnail = db.Column(db.LargeBinary(length=4 * 1024 * 1024), nullable=True)  # MEDIUMBLOB
     thumbnail_iv = db.Column(db.String(64), nullable=True)
     description = db.Column(db.Text, nullable=True)

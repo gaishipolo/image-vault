@@ -1,10 +1,14 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { deriveKey, storeKey, getStoredKey, clearKey } from '../utils/crypto';
+import { deriveKey, getKeyHash, storeKey, getStoredKey, clearKey } from '../utils/crypto';
 
 const CryptoContext = createContext(null);
 
 export function CryptoProvider({ children }) {
   const [aesKey, setAesKey] = useState(() => getStoredKey());
+  const [keyHash, setKeyHash] = useState(() => {
+    const key = getStoredKey();
+    return key ? getKeyHash(key) : null;
+  });
   const [keyReady, setKeyReady] = useState(() => !!getStoredKey());
 
   // 组件挂载时尝试从 sessionStorage 恢复密钥
@@ -12,6 +16,7 @@ export function CryptoProvider({ children }) {
     const stored = getStoredKey();
     if (stored) {
       setAesKey(stored);
+      setKeyHash(getKeyHash(stored));
       setKeyReady(true);
     }
   }, []);
@@ -20,6 +25,7 @@ export function CryptoProvider({ children }) {
     const key = deriveKey(passphrase);
     storeKey(key);
     setAesKey(key);
+    setKeyHash(getKeyHash(key));
     setKeyReady(true);
     return key;
   }, []);
@@ -27,11 +33,13 @@ export function CryptoProvider({ children }) {
   const lockKey = useCallback(() => {
     clearKey();
     setAesKey(null);
+    setKeyHash(null);
     setKeyReady(false);
   }, []);
 
   const value = {
     aesKey,
+    keyHash,
     keyReady,
     unlockKey,
     lockKey

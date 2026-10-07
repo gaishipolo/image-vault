@@ -70,6 +70,7 @@ def _image_to_dict(image: Image, *, include_data: bool = False, include_thumbnai
         "mime_type": image.mime_type,
         "file_size": image.file_size,
         "iv": image.iv,
+        "key_hash": image.key_hash,
         "has_thumbnail": image.encrypted_thumbnail is not None,
         "description": image.description,
         "tags": image.tags,
@@ -117,9 +118,14 @@ def list_images():
     if order not in ("asc", "desc"):
         return _error("INVALID_ORDER", "order 只支持 asc 或 desc")
 
+    # 密钥哈希过滤（只返回当前密钥可解密的图片）
+    key_hash: str = request.args.get("key_hash", "").strip()
+    query = Image.query
+    if key_hash:
+        query = query.filter(Image.key_hash == key_hash)
+
     # 搜索过滤
     search: str = request.args.get("search", "").strip()
-    query = Image.query
     if search:
         # 转义 LIKE 通配符
         escaped_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
@@ -260,6 +266,7 @@ def upload_image():
         file_size=file_size,
         encrypted_data=encrypted_bytes,
         iv=data["iv"],
+        key_hash=data.get("key_hash"),  # 密钥哈希，用于后端过滤
         encrypted_thumbnail=encrypted_thumbnail_bytes,
         thumbnail_iv=thumbnail_iv_value,
         description=data.get("description"),
@@ -304,6 +311,7 @@ def update_image(image_id: int):
 
 # ---------------------------------------------------------------------------
 # PUT /api/images/batch -- 批量更新图片标签
+# 注意：此路由必须在 /<int:image_id> 之前注册，否则会被参数路由捕获
 # ---------------------------------------------------------------------------
 
 @images_bp.route("/batch", methods=["PUT"])
@@ -330,6 +338,40 @@ def batch_update_tags():
     # 批量更新
     updated = Image.query.filter(Image.id.in_(ids)).update(
         {"tags": tags}, synchronize_session=False
+    )
+    db.session.commit()
+
+    return _success({"updated": updated})
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/images/batch-key-hash -- 批量生成/更新密钥哈希
+# ---------------------------------------------------------------------------
+
+@images_bp.route("/batch-key-hash", methods=["PUT"])
+@jwt_required()
+def batch_update_key_hash():
+    """批量更新图片的密钥哈希。
+
+    请求体 (JSON):
+        ids:      list[int] -- 图片 ID 列表
+        key_hash: str       -- 密钥哈希值
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return _error("INVALID_REQUEST", "请求体必须为 JSON 格式", 400)
+
+    ids = data.get("ids", [])
+    key_hash = data.get("key_hash", "")
+
+    if not ids:
+        return _error("MISSING_FIELDS", "缺少 ids 参数")
+    if not key_hash:
+        return _error("MISSING_FIELDS", "缺少 key_hash 参数")
+
+    # 批量更新
+    updated = Image.query.filter(Image.id.in_(ids)).update(
+        {"key_hash": key_hash}, synchronize_session=False
     )
     db.session.commit()
 

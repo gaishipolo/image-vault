@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { clearImageCache } from '../utils/imageCache';
 
 // 生产环境使用相对路径，开发环境使用完整地址
 const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
 const client = axios.create({
   baseURL: API_BASE,
-  timeout: 30000,
+  timeout: 15000, // 15秒超时
   headers: {
     'Content-Type': 'application/json'
   }
@@ -28,9 +29,10 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // token 过期或无效，清除本地存储
+      // token 过期或无效，清除本地存储和缓存
       localStorage.removeItem('jwt_token');
       sessionStorage.removeItem('aes_key');
+      clearImageCache();
       // 如果不在登录页，则跳转到登录页
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';

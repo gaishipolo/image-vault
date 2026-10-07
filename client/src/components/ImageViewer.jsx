@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import CryptoJS from 'crypto-js';
 import { useCrypto } from '../context/CryptoContext';
 import { getImage } from '../api/images';
-import { decryptImage } from '../utils/crypto';
 import { getCachedImage, setCachedImage } from '../utils/imageCache';
+import { decryptWithWorker } from '../utils/crypto';
 import './ImageViewer.css';
 
 /**
@@ -64,44 +65,72 @@ export default function ImageViewer({ images, currentIndex, onClose }) {
     touchEndRef.current = { x: 0, y: 0 };
   }, [images.length]);
 
-  // 解密当前图片
+  // 解密当前图片（使用 Web Worker + 预加载）
   useEffect(() => {
     if (!currentImage || !aesKey) return;
 
     let cancelled = false;
+    const TIMEOUT_MS = 15000;
+    const keyHex = aesKey.toString(CryptoJS.enc.Hex);
+
+    // 加载并解密单张图片
+    const loadOne = async (imageId) => {
+      // 检查缓存
+      const cached = getCachedImage(imageId);
+      if (cached) return cached;
+
+      // API 请求（带超时）
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('请求超时')), TIMEOUT_MS);
+      });
+
+      const response = await Promise.race([getImage(imageId), timeoutPromise]);
+      const imageData = response.data || response;
+      const { encrypted_data, iv, mime_type } = imageData;
+
+      // 使用 Web Worker 解密（不阻塞 UI）
+      const base64Data = await decryptWithWorker(encrypted_data, iv, keyHex);
+      const dataUrl = `data:${mime_type};base64,${base64Data}`;
+
+      // 存入缓存
+      setCachedImage(imageId, dataUrl);
+      return dataUrl;
+    };
+
+    // 预加载相邻图片（后台静默加载）
+    const preloadAdjacent = async () => {
+      const prevIdx = (index - 1 + images.length) % images.length;
+      const nextIdx = (index + 1) % images.length;
+      const prevId = images[prevIdx]?.id;
+      const nextId = images[nextIdx]?.id;
+
+      // 后台预加载，不阻塞当前图片显示
+      if (prevId && !getCachedImage(prevId)) {
+        loadOne(prevId).catch(() => {});
+      }
+      if (nextId && !getCachedImage(nextId)) {
+        loadOne(nextId).catch(() => {});
+      }
+    };
 
     const loadAndDecrypt = async () => {
-      // 检查缓存
-      const cached = getCachedImage(currentImage.id);
-      if (cached) {
-        if (!cancelled) {
-          setDecryptedSrc(cached);
-          setLoading(false);
-        }
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
       try {
-        const response = await getImage(currentImage.id);
-        const imageData = response.data || response;
-        const { encrypted_data, iv, mime_type } = imageData;
-
-        const base64Data = decryptImage(encrypted_data, iv, aesKey);
-        const dataUrl = `data:${mime_type};base64,${base64Data}`;
-
-        // 存入缓存
-        setCachedImage(currentImage.id, dataUrl);
-
+        const dataUrl = await loadOne(currentImage.id);
         if (!cancelled) {
           setDecryptedSrc(dataUrl);
         }
+        // 当前图片加载完后，预加载相邻图片
+        preloadAdjacent();
       } catch (err) {
         if (!cancelled) {
-          console.error('解密图片失败:', err);
-          setError('图片解密失败，请检查加密口令是否正确');
+          if (err.message === '请求超时') {
+            setError('加载超时，请检查网络连接');
+          } else {
+            setError('图片解密失败');
+          }
         }
       } finally {
         if (!cancelled) {
@@ -113,7 +142,7 @@ export default function ImageViewer({ images, currentIndex, onClose }) {
     loadAndDecrypt();
 
     return () => { cancelled = true; };
-  }, [index, currentImage, aesKey]);
+  }, [index, currentImage, aesKey, images]);
 
   // 幻灯片定时器
   useEffect(() => {

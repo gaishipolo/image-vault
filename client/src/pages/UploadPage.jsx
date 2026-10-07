@@ -9,7 +9,7 @@ import UploadForm from '../components/UploadForm';
 
 export default function UploadPage() {
   const { isAuthenticated } = useAuth();
-  const { keyReady, aesKey } = useCrypto();
+  const { keyReady, aesKey, keyHash } = useCrypto();
   const navigate = useNavigate();
 
   const [files, setFiles] = useState([]);
@@ -59,6 +59,7 @@ export default function UploadPage() {
           encrypted_thumbnail: thumbnailCiphertext,
           iv: iv,
           thumbnail_iv: thumbnailIv,
+          key_hash: keyHash,
           original_filename: item.file.name,
           mime_type: item.file.type,
           file_size: item.file.size

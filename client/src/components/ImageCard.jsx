@@ -1,21 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCrypto } from '../context/CryptoContext';
 import { decryptImage } from '../utils/crypto';
 
 export default function ImageCard({ image, onSelect, onDelete, isSelected, onToggleSelect }) {
   const { aesKey } = useCrypto();
   const [thumbnailSrc, setThumbnailSrc] = useState(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef(null);
 
+  // 懒加载：使用 IntersectionObserver 检测可见性
   useEffect(() => {
-    if (image.encrypted_thumbnail && image.thumbnail_iv && aesKey) {
-      try {
-        const decrypted = decryptImage(image.encrypted_thumbnail, image.thumbnail_iv, aesKey);
-        setThumbnailSrc(decrypted);
-      } catch {
-        setThumbnailSrc(null);
-      }
+    const element = cardRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.unobserve(element);
+        }
+      },
+      { rootMargin: '200px' } // 提前200px开始加载
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // 可见时才解密缩略图
+  useEffect(() => {
+    if (!isVisible || !image.encrypted_thumbnail || !image.thumbnail_iv || !aesKey) return;
+
+    try {
+      const decrypted = decryptImage(image.encrypted_thumbnail, image.thumbnail_iv, aesKey);
+      setThumbnailSrc(decrypted);
+    } catch {
+      setThumbnailSrc(null);
     }
-  }, [image.encrypted_thumbnail, image.thumbnail_iv, aesKey]);
+  }, [isVisible, image.encrypted_thumbnail, image.thumbnail_iv, aesKey]);
 
   const formatSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
@@ -50,6 +72,7 @@ export default function ImageCard({ image, onSelect, onDelete, isSelected, onTog
 
   return (
     <div
+      ref={cardRef}
       className={`image-card ${isSelected ? 'image-card-selected' : ''}`}
       onClick={() => onSelect(image)}
     >

@@ -12,6 +12,11 @@ export function deriveKey(passphrase) {
   });
 }
 
+// 计算密钥哈希（用于后端过滤）
+export function getKeyHash(key) {
+  return CryptoJS.SHA256(key.toString()).toString(CryptoJS.enc.Hex);
+}
+
 // 存储/获取密钥到 sessionStorage
 export function storeKey(key) {
   sessionStorage.setItem('aes_key', key.toString(CryptoJS.enc.Hex));

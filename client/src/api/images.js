@@ -6,6 +6,12 @@ export async function getImages(params = {}) {
   return res.data;
 }
 
+// 获取图片列表（带密钥哈希过滤）
+export async function getImagesWithKeyHash(params = {}) {
+  const res = await client.get('/api/images', { params });
+  return res.data;
+}
+
 // 获取单张图片详情
 export async function getImage(imageId) {
   const res = await client.get(`/api/images/${imageId}`);

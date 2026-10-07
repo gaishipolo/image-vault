@@ -11,7 +11,7 @@ import ImageCard from '../components/ImageCard';
 
 export default function GalleryPage() {
   const { isAuthenticated } = useAuth();
-  const { keyReady, aesKey } = useCrypto();
+  const { keyReady, aesKey, keyHash } = useCrypto();
 
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,7 @@ export default function GalleryPage() {
   const [pageSize, setPageSize] = useState(20);
   const [jumpToPage, setJumpToPage] = useState('');
   const [search, setSearch] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [viewerImage, setViewerImage] = useState(null);
   const [viewerLoading, setViewerLoading] = useState(false);
@@ -32,7 +33,12 @@ export default function GalleryPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await getImages({ page, limit: pageSize, search: searchTerm || undefined });
+      const params = { page, limit: pageSize, search: searchTerm || undefined };
+      // 如果不显示全部，则按密钥哈希过滤
+      if (!showAll && keyHash) {
+        params.key_hash = keyHash;
+      }
+      const response = await getImages(params);
       const items = response.data?.items || response.items || [];
       setImages(items);
       setTotalPages(response.data?.pagination?.pages || response.pagination?.pages || 1);
@@ -42,7 +48,7 @@ export default function GalleryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, keyHash, showAll]);
 
   useEffect(() => {
     if (isAuthenticated && keyReady) {
@@ -124,8 +130,13 @@ export default function GalleryPage() {
 
     setViewerLoading(true);
 
+    const TIMEOUT_MS = 15000;
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('请求超时')), TIMEOUT_MS);
+    });
+
     try {
-      const detail = await getImage(image.id);
+      const detail = await Promise.race([getImage(image.id), timeoutPromise]);
       const imageData = detail.data || detail;
       const decrypted = decryptImage(imageData.encrypted_data, imageData.iv, aesKey);
 
@@ -141,10 +152,11 @@ export default function GalleryPage() {
       }
     } catch (err) {
       if (!viewerClosedRef.current) {
+        const errMsg = err.message === '请求超时' ? '加载超时，请检查网络' : '解密失败';
         setViewerImage((prev) => ({
           ...prev,
           decryptedSrc: null,
-          decryptError: '解密失败: ' + err.message
+          decryptError: errMsg
         }));
       }
     } finally {
@@ -195,6 +207,25 @@ export default function GalleryPage() {
     fetchImages(search);
   };
 
+  const handleBatchKeyHash = async () => {
+    if (!keyHash) {
+      toast('请先设置加密口令', 'error');
+      return;
+    }
+
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+
+    try {
+      const res = await client.put('/api/images/batch-key-hash', { ids, key_hash: keyHash });
+      toast(`${res.data.data.updated} 个图片已标记为当前密钥可解密`, 'success');
+      fetchImages(search);
+      setSelected(new Set());
+    } catch (err) {
+      toast('批量标记失败: ' + (err.response?.data?.error?.message || err.message), 'error');
+    }
+  };
+
   return (
     <Layout>
       <div className="gallery">
@@ -214,6 +245,14 @@ export default function GalleryPage() {
           </form>
 
           <div className="toolbar-actions">
+            <button
+              className={`btn btn-sm ${showAll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => { setShowAll(!showAll); setPage(1); }}
+              title={showAll ? '只显示可解密图片' : '显示所有图片'}
+            >
+              {showAll ? '显示全部' : '仅可解密'}
+            </button>
+
             {selected.size > 0 && (
               <div className="batch-actions">
                 <span className="batch-count">已选 {selected.size} 项</span>
@@ -222,6 +261,9 @@ export default function GalleryPage() {
                 </button>
                 <button className="btn btn-primary btn-sm" onClick={() => setShowTagDialog(true)}>
                   批量打标签
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={handleBatchKeyHash} title="标记选中图片为当前密钥可解密">
+                  标记密钥
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={handleBatchDelete}>
                   批量删除
