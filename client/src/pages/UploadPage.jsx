@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCrypto } from '../context/CryptoContext';
 import { uploadImage } from '../api/images';
-import { encryptImage, generateThumbnail } from '../utils/crypto';
+import { encryptImage, generateThumbnail, smartCompress } from '../utils/crypto';
 import Layout from '../components/Layout';
 import UploadForm from '../components/UploadForm';
 
@@ -45,15 +45,20 @@ export default function UploadPage() {
       setProgress({ current: i + 1, total: files.length });
 
       try {
-        // 1. Read file as base64 and generate thumbnail
-        const base64Data = await readFileAsBase64(item.file);
+        // 1. 智能压缩（PNG/BMP → WebP 无损，JPEG 保持原样）
+        const compressed = await smartCompress(item.file);
+        if (compressed.ratio > 0) {
+          console.log(`压缩 ${item.file.name}: ${compressed.ratio}% 减小`);
+        }
+
+        // 2. 生成缩略图
         const thumbnailData = await generateThumbnail(item.file);
 
-        // 2. Encrypt the image data and thumbnail
-        const { ciphertext, iv } = encryptImage(base64Data, aesKey);
+        // 3. 加密压缩后的数据和缩略图
+        const { ciphertext, iv } = encryptImage(compressed.data, aesKey);
         const { ciphertext: thumbnailCiphertext, iv: thumbnailIv } = encryptImage(thumbnailData, aesKey);
 
-        // 3. Build JSON data
+        // 4. Build JSON data
         const jsonData = {
           encrypted_data: ciphertext,
           encrypted_thumbnail: thumbnailCiphertext,
@@ -61,8 +66,8 @@ export default function UploadPage() {
           thumbnail_iv: thumbnailIv,
           key_hash: keyHash,
           original_filename: item.file.name,
-          mime_type: item.file.type,
-          file_size: item.file.size
+          mime_type: compressed.mime_type,
+          file_size: compressed.compressed_size
         };
         if (item.description) {
           jsonData.description = item.description;
@@ -71,7 +76,7 @@ export default function UploadPage() {
           jsonData.tags = item.tags;
         }
 
-        // 4. Upload
+        // 5. Upload
         await uploadImage(jsonData);
 
         uploadResults.push({

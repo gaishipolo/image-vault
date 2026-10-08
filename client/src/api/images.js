@@ -37,3 +37,9 @@ export async function getImageMeta(imageId) {
   const res = await client.get(`/api/images/${imageId}/meta`);
   return res.data;
 }
+
+// 更新图片加密数据（用于重新压缩）
+export async function updateImageData(imageId, data) {
+  const res = await client.put(`/api/images/${imageId}/data`, data);
+  return res.data;
+}

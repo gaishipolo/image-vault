@@ -379,6 +379,60 @@ def batch_update_key_hash():
 
 
 # ---------------------------------------------------------------------------
+# PUT /api/images/<id>/data -- 更新图片加密数据（用于重新压缩）
+# ---------------------------------------------------------------------------
+
+@images_bp.route("/<int:image_id>/data", methods=["PUT"])
+@jwt_required()
+def update_image_data(image_id: int):
+    """更新图片的加密数据（用于重新压缩）。
+
+    请求体 (JSON):
+        encrypted_data: str -- 新的加密数据（base64）
+        iv:             str -- 新的 IV
+        mime_type:      str -- 新的 MIME 类型
+        file_size:      int -- 新的文件大小
+    """
+    image: Image | None = db.session.get(Image, image_id)
+    if image is None:
+        return _error("NOT_FOUND", f"图片 {image_id} 不存在", 404)
+
+    data = request.get_json(silent=True)
+    if not data:
+        return _error("INVALID_REQUEST", "请求体必须为 JSON 格式", 400)
+
+    # 更新加密数据
+    if "encrypted_data" in data:
+        try:
+            image.encrypted_data = base64.b64decode(data["encrypted_data"])
+        except Exception:
+            return _error("INVALID_DATA", "encrypted_data 不是有效的 base64 编码")
+
+    if "iv" in data:
+        image.iv = data["iv"]
+
+    if "mime_type" in data:
+        image.mime_type = data["mime_type"]
+
+    if "file_size" in data:
+        image.file_size = int(data["file_size"])
+
+    # 更新缩略图（如果有）
+    if "encrypted_thumbnail" in data and data["encrypted_thumbnail"]:
+        try:
+            image.encrypted_thumbnail = base64.b64decode(data["encrypted_thumbnail"])
+        except Exception:
+            pass
+
+    if "thumbnail_iv" in data:
+        image.thumbnail_iv = data["thumbnail_iv"]
+
+    db.session.commit()
+
+    return _success(_image_to_dict(image))
+
+
+# ---------------------------------------------------------------------------
 # DELETE /api/images/<id> -- 删除图片
 # ---------------------------------------------------------------------------
 

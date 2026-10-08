@@ -64,6 +64,68 @@ export function generateThumbnail(file, maxWidth = 200) {
   });
 }
 
+// WebP 无损压缩
+function compressToWebPLossless(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('WebP 压缩失败'));
+        }
+      }, 'image/webp', 1.0);
+    };
+
+    img.onerror = () => reject(new Error('图片加载失败'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// 读取 Blob 为 base64 data URL
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('读取失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 智能压缩：根据原图格式选择策略
+export async function smartCompress(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  // PNG/BMP/TIFF → WebP 无损压缩（体积减小 25-80%）
+  if (['png', 'bmp', 'tiff', 'tif'].includes(ext)) {
+    const compressed = await compressToWebPLossless(file);
+    return {
+      data: await blobToBase64(compressed),
+      mime_type: 'image/webp',
+      original_size: file.size,
+      compressed_size: compressed.size,
+      ratio: ((1 - compressed.size / file.size) * 100).toFixed(1)
+    };
+  }
+
+  // JPEG/WebP/GIF → 保持原样（已是压缩格式）
+  return {
+    data: await blobToBase64(file),
+    mime_type: file.type || 'image/jpeg',
+    original_size: file.size,
+    compressed_size: file.size,
+    ratio: 0
+  };
+}
+
 // 加密图片（AES-256-CBC）
 export function encryptImage(base64Data, key) {
   const iv = CryptoJS.lib.WordArray.random(16);

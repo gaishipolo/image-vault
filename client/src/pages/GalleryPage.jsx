@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCrypto } from '../context/CryptoContext';
-import { getImages, deleteImage, getImage } from '../api/images';
-import { decryptImage } from '../utils/crypto';
+import { getImages, deleteImage, getImage, updateImageData } from '../api/images';
+import { decryptImage, encryptImage, smartCompress } from '../utils/crypto';
 import { getCachedImage, setCachedImage } from '../utils/imageCache';
 import { toast } from '../components/Toast';
 import client from '../api/client';
@@ -226,6 +226,74 @@ export default function GalleryPage() {
     }
   };
 
+  const handleBatchRecompress = async () => {
+    if (!aesKey) {
+      toast('请先设置加密口令', 'error');
+      return;
+    }
+
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+
+    if (!window.confirm(`将对 ${ids.length} 张图片进行重新压缩（PNG/BMP → WebP无损），是否继续？`)) {
+      return;
+    }
+
+    let success = 0;
+    let failed = 0;
+    let savedBytes = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      toast(`正在处理 ${i + 1}/${ids.length}...`, 'info');
+
+      try {
+        // 1. 获取加密数据
+        const detail = await getImage(id);
+        const imageData = detail.data || detail;
+
+        // 2. 解密
+        const decrypted = decryptImage(imageData.encrypted_data, imageData.iv, aesKey);
+
+        // 3. base64 转 Blob
+        const byteString = atob(decrypted.split(',')[1] || decrypted);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let j = 0; j < byteString.length; j++) {
+          ia[j] = byteString.charCodeAt(j);
+        }
+        const blob = new Blob([ab], { type: imageData.mime_type });
+        const file = new File([blob], imageData.original_filename, { type: imageData.mime_type });
+
+        // 4. 智能压缩
+        const compressed = await smartCompress(file);
+
+        // 5. 重新加密
+        const { ciphertext, iv } = encryptImage(compressed.data, aesKey);
+
+        // 6. 更新数据库
+        await updateImageData(id, {
+          encrypted_data: ciphertext,
+          iv: iv,
+          mime_type: compressed.mime_type,
+          file_size: compressed.compressed_size
+        });
+
+        savedBytes += (imageData.file_size - compressed.compressed_size);
+        success++;
+      } catch (err) {
+        console.error(`重新压缩图片 ${id} 失败:`, err);
+        failed++;
+      }
+    }
+
+    const savedMB = (savedBytes / 1024 / 1024).toFixed(2);
+    toast(`完成：${success} 张成功，${failed} 张失败，节省 ${savedMB} MB`, success > 0 ? 'success' : 'error');
+
+    fetchImages(search);
+    setSelected(new Set());
+  };
+
   return (
     <Layout>
       <div className="gallery">
@@ -264,6 +332,9 @@ export default function GalleryPage() {
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={handleBatchKeyHash} title="标记选中图片为当前密钥可解密">
                   标记密钥
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={handleBatchRecompress} title="重新压缩（PNG/BMP → WebP无损）">
+                  重新压缩
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={handleBatchDelete}>
                   批量删除
